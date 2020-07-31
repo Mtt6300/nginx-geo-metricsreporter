@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nginx-geo-metricsreporter.fullname" . }}
+  labels:
+    {{- include "nginx-geo-metricsreporter.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nginx-geo-metricsreporter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nginx-geo-metricsreporter.selectorLabels" . | nindent 8 }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "nginx-geo-metricsreporter.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.metricsreporter.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Values.metricsreporter.Name }}
+          securityContext:
+            {{- toYaml .Values.metricsreporter.securityContext | nindent 12 }}
+          image: "{{ .Values.metricsreporter.image.repository }}:{{ .Values.metricsreporter.image.tag }}"
+          imagePullPolicy: {{ .Values.metricsreporter.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+        - name: {{ .Values.nginxparser.Name }}
+          securityContext:
+            {{- toYaml .Values.nginxparser.securityContext | nindent 12 }}
+          image: "{{ .Values.nginxparser.image.repository }}:{{ .Values.nginxparser.image.tag }}"
+          imagePullPolicy: {{ .Values.nginxparser.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.nginxparser.resources | nindent 12 }}
+
+          env:
+          - name: URL
+            value: "{{ .Values.metricsreporter.Name }}:{{ .Values.metricsreporter.service.port }}"
+
+          envFrom:
+            - configMapRef:
+                name: {{ include "nginx-geo-metricsreporter.name" . }}
+          volumeMounts:
+          - name: varlog
+            mountPath: /var/log
+
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log

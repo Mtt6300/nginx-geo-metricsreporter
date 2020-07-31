@@ -1,0 +1,10 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ include "nginx-geo-metricsreporter.name" . }}
+  labels:
+    {{- include "nginx-geo-metricsreporter.labels" . | nindent 4 }}
+data:
+{{- range $key, $val := .Values.nginxparser.environmentVariables }}
+{{ $key | quote | indent 1}}: {{ $val | quote }}
+{{- end}}
